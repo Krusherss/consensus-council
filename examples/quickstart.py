@@ -1,11 +1,11 @@
-"""Quickstart example for hydra-consensus.
+"""Quickstart example for consensus-council.
 
 Demonstrates basic voting and debate across multiple LLM models.
 Requires API keys set as environment variables (e.g. OPENAI_API_KEY,
 ANTHROPIC_API_KEY, GEMINI_API_KEY).
 """
 
-from hydra_consensus import Council
+from consensus_council import Council
 
 # --- Simple vote ---
 council = Council(models=["gpt-4o", "claude-sonnet-4-5-20250514", "gemini-2.0-flash"])

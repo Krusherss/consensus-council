@@ -1,4 +1,4 @@
-"""Stalemate detection and resolution for hydra-consensus.
+"""Stalemate detection and resolution for consensus-council.
 
 Detects when a debate is going in circles (same votes, no new arguments)
 and applies a configurable resolution strategy.

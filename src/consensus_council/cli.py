@@ -1,6 +1,6 @@
-"""CLI interface for hydra-consensus.
+"""CLI interface for consensus-council.
 
-Provides `hydra vote` and `hydra debate` commands with Rich-formatted output.
+Provides `consensus-council vote` and `consensus-council debate` commands with Rich-formatted output.
 """
 
 from __future__ import annotations
@@ -19,9 +19,9 @@ console = Console()
 
 
 @click.group()
-@click.version_option(package_name="hydra-consensus")
+@click.version_option(package_name="consensus-council")
 def main() -> None:
-    """Hydra Consensus -- multi-model voting with anti-sycophancy."""
+    """Consensus Council -- multi-model voting with anti-sycophancy."""
     pass
 
 
@@ -76,7 +76,7 @@ def vote(
     """Run a single-round vote across models.
 
     Example:
-        hydra vote "Is this code safe?" -m gpt-4o -m claude-sonnet-4-5-20250514 -t 0.66
+        consensus-council vote "Is this code safe?" -m gpt-4o -m claude-sonnet-4-5-20250514 -t 0.66
     """
     context = ""
     if context_file:
@@ -175,7 +175,7 @@ def debate(
     """Run a multi-round debate across models.
 
     Example:
-        hydra debate "Best database?" -m gpt-4o -m claude-sonnet-4-5-20250514 -r 3
+        consensus-council debate "Best database?" -m gpt-4o -m claude-sonnet-4-5-20250514 -r 3
     """
     context = ""
     if context_file:

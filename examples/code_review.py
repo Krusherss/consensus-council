@@ -1,11 +1,11 @@
-"""Code review example using hydra-consensus.
+"""Code review example using consensus-council.
 
 Ask multiple models to review a code diff and reach consensus on
 whether it is safe to deploy.
 """
 
-from hydra_consensus import Council
-from hydra_consensus.cost import CostCeiling
+from consensus_council import Council
+from consensus_council.cost import CostCeiling
 
 # Example code diff to review
 code_diff = '''

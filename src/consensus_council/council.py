@@ -1,4 +1,4 @@
-"""Main Council class for hydra-consensus.
+"""Main Council class for consensus-council.
 
 The Council orchestrates multi-model voting and debate, integrating
 anti-sycophancy measures, stalemate detection, and cost control.

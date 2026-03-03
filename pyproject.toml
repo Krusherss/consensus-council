@@ -3,7 +3,7 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [project]
-name = "hydra-consensus"
+name = "consensus-council"
 version = "0.1.0"
 description = "Drop-in multi-model voting with anti-sycophancy and stalemate resolution"
 readme = "README.md"
@@ -45,15 +45,15 @@ dev = [
 ]
 
 [project.scripts]
-hydra = "hydra_consensus.cli:main"
+consensus-council = "consensus_council.cli:main"
 
 [project.urls]
-Homepage = "https://github.com/maxle/hydra-consensus"
-Repository = "https://github.com/maxle/hydra-consensus"
-Issues = "https://github.com/maxle/hydra-consensus/issues"
+Homepage = "https://github.com/Krusherss/consensus-council"
+Repository = "https://github.com/Krusherss/consensus-council"
+Issues = "https://github.com/Krusherss/consensus-council/issues"
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/hydra_consensus"]
+packages = ["src/consensus_council"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
