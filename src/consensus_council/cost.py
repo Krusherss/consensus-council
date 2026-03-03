@@ -1,4 +1,4 @@
-"""Cost ceiling and budget management for hydra-consensus.
+"""Cost ceiling and budget management for consensus-council.
 
 Tracks per-model and total spend, estimates costs before calls,
 and enforces hard budget limits.

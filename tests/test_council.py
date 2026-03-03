@@ -10,10 +10,10 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from hydra_consensus.cost import BudgetExceededError, CostCeiling
-from hydra_consensus.council import Council
-from hydra_consensus.stalemate import StalemateStrategy
-from hydra_consensus.voting import Vote
+from consensus_council.cost import BudgetExceededError, CostCeiling
+from consensus_council.council import Council
+from consensus_council.stalemate import StalemateStrategy
+from consensus_council.voting import Vote
 
 
 # ---------------------------------------------------------------------------
@@ -72,7 +72,7 @@ class TestCouncilVote:
             "model-b": "Looks good to me. FINAL VOTE: YES",
             "model-c": "I have concerns. FINAL VOTE: NO",
         })
-        with patch("hydra_consensus.council.litellm") as mock_litellm:
+        with patch("consensus_council.council.litellm") as mock_litellm:
             mock_litellm.acompletion = mock
             mock_litellm.completion_cost = MagicMock(return_value=0.01)
 
@@ -90,7 +90,7 @@ class TestCouncilVote:
             "model-b": "Critical issues. FINAL VOTE: NO",
             "model-c": "Seems fine. FINAL VOTE: YES",
         })
-        with patch("hydra_consensus.council.litellm") as mock_litellm:
+        with patch("consensus_council.council.litellm") as mock_litellm:
             mock_litellm.acompletion = mock
             mock_litellm.completion_cost = MagicMock(return_value=0.01)
 
@@ -106,7 +106,7 @@ class TestCouncilVote:
             "model-b": "FINAL VOTE: YES",
             "model-c": "FINAL VOTE: NO",
         })
-        with patch("hydra_consensus.council.litellm") as mock_litellm:
+        with patch("consensus_council.council.litellm") as mock_litellm:
             mock_litellm.acompletion = mock
             mock_litellm.completion_cost = MagicMock(return_value=0.01)
 
@@ -124,7 +124,7 @@ class TestCouncilVote:
             "model-b": "FINAL VOTE: YES",
             "model-c": "FINAL VOTE: NO",
         })
-        with patch("hydra_consensus.council.litellm") as mock_litellm:
+        with patch("consensus_council.council.litellm") as mock_litellm:
             mock_litellm.acompletion = mock
             mock_litellm.completion_cost = MagicMock(return_value=0.01)
 
@@ -146,7 +146,7 @@ class TestCouncilVote:
                 raise ConnectionError("API timeout")
             return _mock_response(f"FINAL VOTE: YES")
 
-        with patch("hydra_consensus.council.litellm") as mock_litellm:
+        with patch("consensus_council.council.litellm") as mock_litellm:
             mock_litellm.acompletion = AsyncMock(side_effect=side_effect)
             mock_litellm.completion_cost = MagicMock(return_value=0.01)
 
@@ -163,7 +163,7 @@ class TestCouncilVote:
             "model-a": "FINAL VOTE: YES",
             "model-b": "FINAL VOTE: NO",
         })
-        with patch("hydra_consensus.council.litellm") as mock_litellm:
+        with patch("consensus_council.council.litellm") as mock_litellm:
             mock_litellm.acompletion = mock
             mock_litellm.completion_cost = MagicMock(return_value=0.05)
 
@@ -184,7 +184,7 @@ class TestCouncilDebate:
             "model-b": "FINAL VOTE: YES",
             "model-c": "FINAL VOTE: YES",
         })
-        with patch("hydra_consensus.council.litellm") as mock_litellm:
+        with patch("consensus_council.council.litellm") as mock_litellm:
             mock_litellm.acompletion = mock
             mock_litellm.completion_cost = MagicMock(return_value=0.01)
 
@@ -201,7 +201,7 @@ class TestCouncilDebate:
             "model-a": "I think yes. FINAL VOTE: YES",
             "model-b": "I think no. FINAL VOTE: NO",
         })
-        with patch("hydra_consensus.council.litellm") as mock_litellm:
+        with patch("consensus_council.council.litellm") as mock_litellm:
             mock_litellm.acompletion = mock
             mock_litellm.completion_cost = MagicMock(return_value=0.01)
 
@@ -225,7 +225,7 @@ class TestCouncilDebate:
             "model-a": "FINAL VOTE: YES",
             "model-b": "FINAL VOTE: NO",
         })
-        with patch("hydra_consensus.council.litellm") as mock_litellm:
+        with patch("consensus_council.council.litellm") as mock_litellm:
             mock_litellm.acompletion = mock
             mock_litellm.completion_cost = MagicMock(return_value=0.50)
 
@@ -254,7 +254,7 @@ class TestCouncilDebate:
                 return _mock_response("I say yes. FINAL VOTE: YES")
             return _mock_response("I say no. FINAL VOTE: NO")
 
-        with patch("hydra_consensus.council.litellm") as mock_litellm:
+        with patch("consensus_council.council.litellm") as mock_litellm:
             mock_litellm.acompletion = AsyncMock(side_effect=side_effect)
             mock_litellm.completion_cost = MagicMock(return_value=0.01)
 
@@ -281,7 +281,7 @@ class TestCouncilDebate:
                 captured_messages.append(messages[0].get("content", ""))
             return _mock_response("FINAL VOTE: YES")
 
-        with patch("hydra_consensus.council.litellm") as mock_litellm:
+        with patch("consensus_council.council.litellm") as mock_litellm:
             mock_litellm.acompletion = AsyncMock(side_effect=side_effect)
             mock_litellm.completion_cost = MagicMock(return_value=0.01)
 
@@ -301,7 +301,7 @@ class TestCouncilWeighted:
             "weak-a": "FINAL VOTE: NO",
             "weak-b": "FINAL VOTE: NO",
         })
-        with patch("hydra_consensus.council.litellm") as mock_litellm:
+        with patch("consensus_council.council.litellm") as mock_litellm:
             mock_litellm.acompletion = mock
             mock_litellm.completion_cost = MagicMock(return_value=0.01)
 

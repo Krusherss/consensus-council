@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from hydra_consensus.anti_sycophancy import (
+from consensus_council.anti_sycophancy import (
     BlindVoting,
     RotationOrder,
     build_anti_sycophancy_directive,

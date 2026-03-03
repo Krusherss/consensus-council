@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from hydra_consensus.voting import (
+from consensus_council.voting import (
     ConsensusResult,
     Vote,
     VoteResult,

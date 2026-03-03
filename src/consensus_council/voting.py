@@ -1,4 +1,4 @@
-"""Voting strategies and vote extraction for hydra-consensus.
+"""Voting strategies and vote extraction for consensus-council.
 
 Provides robust extraction of votes (YES/NO/ABSTAIN) and numeric scores
 from freeform LLM text, plus configurable voting strategies from simple

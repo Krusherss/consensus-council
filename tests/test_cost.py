@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from hydra_consensus.cost import (
+from consensus_council.cost import (
     BudgetExceededError,
     CostCeiling,
     CostTracker,

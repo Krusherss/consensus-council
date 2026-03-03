@@ -1,12 +1,12 @@
-"""Content moderation example using hydra-consensus.
+"""Content moderation example using consensus-council.
 
 Use multiple models to decide whether user-submitted content violates
 community guidelines, with debate for borderline cases.
 """
 
-from hydra_consensus import Council
-from hydra_consensus.cost import CostCeiling
-from hydra_consensus.stalemate import StalemateStrategy
+from consensus_council import Council
+from consensus_council.cost import CostCeiling
+from consensus_council.stalemate import StalemateStrategy
 
 # Example user-submitted content
 user_content = """

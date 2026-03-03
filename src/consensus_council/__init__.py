@@ -1,4 +1,4 @@
-"""hydra-consensus: Drop-in multi-model voting with anti-sycophancy and stalemate resolution."""
+"""consensus-council: Drop-in multi-model voting with anti-sycophancy and stalemate resolution."""
 
 from .council import Council
 from .voting import ConsensusResult, Vote, VoteResult, extract_score, extract_vote

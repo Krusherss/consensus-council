@@ -1,21 +1,21 @@
-# hydra-consensus
+# consensus-council
 
 > Drop-in multi-model voting with anti-sycophancy and stalemate resolution.
 
-Ask multiple LLMs the same question and get a reliable, consensus-driven answer. Hydra prevents models from copying each other, detects when debates stall, and keeps your costs under control.
+Ask multiple LLMs the same question and get a reliable, consensus-driven answer. Consensus Council prevents models from copying each other, detects when debates stall, and keeps your costs under control.
 
 **Background:** Battle-tested across 73 books in a multi-model annotation pipeline.
 
 ## Installation
 
 ```bash
-pip install hydra-consensus
+pip install consensus-council
 ```
 
 ## Quick Start
 
 ```python
-from hydra_consensus import Council
+from consensus_council import Council
 
 council = Council(models=["gpt-4o", "claude-sonnet-4-5-20250514", "gemini-2.0-flash"])
 result = council.vote("Is this code safe to deploy?", context=code_diff, threshold=0.66)
@@ -26,7 +26,7 @@ print(result.decision, result.confidence)
 
 ### Voting Strategies
 
-Hydra supports five voting strategies for different reliability requirements:
+Consensus Council supports five voting strategies for different reliability requirements:
 
 | Strategy | Description | Use When |
 |----------|-------------|----------|
@@ -56,7 +56,7 @@ result = council.vote("Is this correct?", strategy="weighted_majority")
 
 ### Anti-Sycophancy
 
-LLMs tend to agree with each other (sycophancy) and anchor on the first response they see (anchoring bias). Hydra fights both:
+LLMs tend to agree with each other (sycophancy) and anchor on the first response they see (anchoring bias). Consensus Council fights both:
 
 - **Blind voting:** In simple votes, each model sees only the original prompt -- never other models' responses.
 - **Rotation ordering:** In debates, the query order is shuffled every round so no model consistently leads.
@@ -89,10 +89,10 @@ print(f"Decision: {result.decision} after {result.rounds} rounds")
 
 ### Stalemate Resolution
 
-When a debate goes in circles (same votes, no new arguments), Hydra detects the stalemate and applies your chosen strategy:
+When a debate goes in circles (same votes, no new arguments), Consensus Council detects the stalemate and applies your chosen strategy:
 
 ```python
-from hydra_consensus.stalemate import StalemateStrategy
+from consensus_council.stalemate import StalemateStrategy
 
 council = Council(
     models=["gpt-4o", "claude-sonnet-4-5-20250514"],
@@ -113,7 +113,7 @@ council = Council(
 Set hard budget limits to prevent runaway costs:
 
 ```python
-from hydra_consensus.cost import CostCeiling
+from consensus_council.cost import CostCeiling
 
 council = Council(
     models=["gpt-4o", "claude-sonnet-4-5-20250514", "gemini-2.0-flash"],
@@ -134,7 +134,7 @@ print(f"Cost: ${result.total_cost:.4f}")
 You can also filter models that fit within a budget before creating the council:
 
 ```python
-from hydra_consensus.cost import select_models_within_budget
+from consensus_council.cost import select_models_within_budget
 
 affordable = select_models_within_budget(
     models=["gpt-4o", "claude-sonnet-4-5-20250514", "gemini-2.0-flash"],
@@ -146,7 +146,7 @@ council = Council(models=affordable)
 
 ### Vote Extraction
 
-Hydra robustly extracts YES/NO votes from freeform model responses. It handles:
+Consensus Council robustly extracts YES/NO votes from freeform model responses. It handles:
 
 - Explicit markers: `FINAL VOTE: YES`, `**NO**`, `DECISION: YES`
 - Synonyms: "I concur", "LGTM", "reject", "block", "unsafe"
@@ -154,7 +154,7 @@ Hydra robustly extracts YES/NO votes from freeform model responses. It handles:
 - Numeric scores: `7/10`, `8 out of 10`, `score: 9`
 
 ```python
-from hydra_consensus import extract_vote, extract_score
+from consensus_council import extract_vote, extract_score
 
 vote, confidence = extract_vote("After careful review, I approve. FINAL VOTE: YES")
 # vote=Vote.YES, confidence=0.95
@@ -165,30 +165,30 @@ score, confidence = extract_score("I would rate this a 7/10.")
 
 ## CLI
 
-Hydra includes a command-line interface for quick experiments:
+Consensus Council includes a command-line interface for quick experiments:
 
 ```bash
 # Simple vote
-hydra vote "Is this approach correct?" \
+consensus-council vote "Is this approach correct?" \
     -m gpt-4o \
     -m claude-sonnet-4-5-20250514 \
     -t 0.66
 
 # Vote with context from a file
-hydra vote "Is this code safe?" \
+consensus-council vote "Is this code safe?" \
     -m gpt-4o \
     -m gemini-2.0-flash \
     --context-file code.py
 
 # Multi-round debate
-hydra debate "Best approach for caching?" \
+consensus-council debate "Best approach for caching?" \
     -m gpt-4o \
     -m claude-sonnet-4-5-20250514 \
     -r 3 \
     --stop-on supermajority
 
 # With stalemate handling
-hydra debate "Should we migrate to Rust?" \
+consensus-council debate "Should we migrate to Rust?" \
     -m gpt-4o \
     -m claude-sonnet-4-5-20250514 \
     -r 5 \
@@ -226,7 +226,7 @@ All operations support async via anyio:
 
 ```python
 import anyio
-from hydra_consensus import Council
+from consensus_council import Council
 
 async def main():
     council = Council(models=["gpt-4o", "claude-sonnet-4-5-20250514"])
@@ -238,7 +238,7 @@ anyio.run(main)
 
 ## Model Support
 
-Hydra uses [LiteLLM](https://docs.litellm.ai/) under the hood, so it supports any model LiteLLM supports:
+Consensus Council uses [LiteLLM](https://docs.litellm.ai/) under the hood, so it supports any model LiteLLM supports:
 
 - OpenAI: `gpt-4o`, `gpt-4o-mini`, `o1`, `o3-mini`
 - Anthropic: `claude-sonnet-4-5-20250514`, `claude-opus-4-20250514`, `claude-haiku-3-5-20241022`

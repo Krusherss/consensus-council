@@ -2,13 +2,13 @@
 
 from __future__ import annotations
 
-from hydra_consensus.stalemate import (
+from consensus_council.stalemate import (
     StalemateStrategy,
     build_moderator_prompt,
     detect_stalemate,
     resolve_stalemate,
 )
-from hydra_consensus.voting import Vote, VoteResult
+from consensus_council.voting import Vote, VoteResult
 
 
 def _make_vote(model: str, vote: Vote, reasoning: str = "Reasons.") -> VoteResult:

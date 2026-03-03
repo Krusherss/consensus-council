@@ -1,4 +1,4 @@
-"""Anti-sycophancy and anti-anchoring measures for hydra-consensus.
+"""Anti-sycophancy and anti-anchoring measures for consensus-council.
 
 Prevents models from copying each other by:
 - Randomising query order to avoid anchoring bias
