@@ -249,6 +249,14 @@ Consensus Council uses [LiteLLM](https://docs.litellm.ai/) under the hood, so it
 
 Set the appropriate API keys as environment variables (`OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `GEMINI_API_KEY`, etc.).
 
+## Disclaimer
+
+Consensus Council is a tool for aggregating LLM opinions. It does **not** guarantee correctness, safety, or fitness for any particular purpose. Model outputs can be wrong, biased, or inconsistent.
+
+**Do not rely on this library for medical, legal, financial, or safety-critical decisions without independent human review.** The authors accept no liability for decisions made based on model outputs, whether or not they reached consensus.
+
+Use at your own risk.
+
 ## License
 
 MIT -- see [LICENSE](LICENSE).
