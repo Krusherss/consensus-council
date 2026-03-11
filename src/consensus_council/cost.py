@@ -6,8 +6,12 @@ and enforces hard budget limits.
 
 from __future__ import annotations
 
+import json
+import threading
 import time
 from dataclasses import dataclass, field
+from datetime import datetime
+from pathlib import Path
 
 import litellm
 
@@ -76,11 +80,23 @@ class _ModelCostEntry:
 class CostTracker:
     """Accumulates costs across a vote or debate session.
 
-    Records per-model and total spend, and can report a breakdown.
+    Records per-model and total spend, prints a per-call one-liner,
+    persists to a JSONL log file, and can report a full breakdown.
+
+    Args:
+        verbose: If True (default), prints a [COST] line after each record() call.
+        log_dir: Optional directory path for JSONL cost logs. A timestamped
+                 file is created on the first call if set.
     """
 
     _models: dict[str, _ModelCostEntry] = field(default_factory=dict)
     _start_time: float = field(default_factory=time.time)
+    verbose: bool = True
+    log_dir: str | None = None
+
+    def __post_init__(self) -> None:
+        self._log_path: Path | None = None
+        self._lock = threading.Lock()
 
     def record(
         self,
@@ -90,13 +106,43 @@ class CostTracker:
         completion_tokens: int = 0,
     ) -> None:
         """Record the cost of a single model call."""
-        if model not in self._models:
-            self._models[model] = _ModelCostEntry()
-        entry = self._models[model]
-        entry.total_cost += cost
-        entry.call_count += 1
-        entry.total_prompt_tokens += prompt_tokens
-        entry.total_completion_tokens += completion_tokens
+        with self._lock:
+            if model not in self._models:
+                self._models[model] = _ModelCostEntry()
+            entry = self._models[model]
+            entry.total_cost += cost
+            entry.call_count += 1
+            entry.total_prompt_tokens += prompt_tokens
+            entry.total_completion_tokens += completion_tokens
+            session_total = self.total_cost
+
+        # Per-call console one-liner
+        if self.verbose:
+            print(
+                f"  [COST] {model} | "
+                f"{prompt_tokens:,} in / {completion_tokens:,} out | "
+                f"${cost:.4f} | Session: ${session_total:.4f}"
+            )
+
+        # JSONL persistence
+        if self.log_dir:
+            if self._log_path is None:
+                log_path = Path(self.log_dir)
+                log_path.mkdir(parents=True, exist_ok=True)
+                ts = datetime.now().strftime("%Y-%m-%d_%H%M%S")
+                self._log_path = log_path / f"costs_{ts}.jsonl"
+            try:
+                record_data = {
+                    "timestamp": datetime.now().isoformat(),
+                    "model": model,
+                    "prompt_tokens": prompt_tokens,
+                    "completion_tokens": completion_tokens,
+                    "cost_usd": round(cost, 6),
+                }
+                with open(self._log_path, "a", encoding="utf-8") as f:
+                    f.write(json.dumps(record_data) + "\n")
+            except Exception:
+                pass
 
     @property
     def total_cost(self) -> float:
@@ -130,7 +176,7 @@ class CostTracker:
         return result
 
     def report(self) -> str:
-        """Human-readable cost report."""
+        """Human-readable cost report (single string)."""
         lines = [f"Total cost: ${self.total_cost:.6f} ({self.total_calls} calls)"]
         for model, entry in sorted(self._models.items()):
             lines.append(
@@ -142,6 +188,30 @@ class CostTracker:
         elapsed = time.time() - self._start_time
         lines.append(f"Elapsed: {elapsed:.1f}s")
         return "\n".join(lines)
+
+    def print_summary(self) -> None:
+        """Print a formatted cost breakdown table to stdout."""
+        bd = self.breakdown()
+        if not bd:
+            return
+        elapsed = time.time() - self._start_time
+        print("\n" + "=" * 70)
+        print("  COST SUMMARY")
+        print(f"  Elapsed: {elapsed:.1f}s  |  Total calls: {self.total_calls}")
+        print("=" * 70)
+        print(
+            f"\n  {'Model':<32} {'Calls':>6} {'Prompt Tok':>12} "
+            f"{'Compl Tok':>12} {'Cost (USD)':>12}"
+        )
+        print("  " + "-" * 76)
+        for model, d in sorted(bd.items(), key=lambda x: -x[1]["cost"]):
+            print(
+                f"  {model:<32} {d['calls']:>6} {d['prompt_tokens']:>12,} "
+                f"{d['completion_tokens']:>12,} ${d['cost']:>11.4f}"
+            )
+        print("\n" + "=" * 70)
+        print(f"  GRAND TOTAL:  ${self.total_cost:>10.4f}")
+        print("=" * 70 + "\n")
 
 
 # ---------------------------------------------------------------------------

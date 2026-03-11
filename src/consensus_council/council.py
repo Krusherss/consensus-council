@@ -260,6 +260,88 @@ class Council:
             reasoning="Debate ended without result.",
         )
 
+    def route(self, prompt: str, route_model: str | None = None) -> str:
+        """Classify a question as 'vote' or 'debate' using a lightweight model.
+
+        STRUCTURED questions (clear YES/NO, defined options) → 'vote'.
+        OPEN_ENDED questions (design, strategy, analysis) → 'debate'.
+
+        Args:
+            prompt: The question to classify.
+            route_model: LiteLLM model for classification. Defaults to the first
+                         model in the council's list.
+
+        Returns:
+            'vote' or 'debate'.
+        """
+        classifier = route_model or self.models[0]
+        classification_prompt = (
+            "Classify this question as either STRUCTURED or OPEN_ENDED.\n\n"
+            "STRUCTURED: Has clear proposals to vote on, asks for YES/NO decisions, "
+            "evaluates specific options with defined criteria.\n"
+            "OPEN_ENDED: Asks for design, strategy, architecture, or complex "
+            "qualitative analysis with no single right answer.\n\n"
+            "Respond with exactly one word: STRUCTURED or OPEN_ENDED\n\n"
+            f"Question: {prompt[:1000]}"
+        )
+        result = anyio.from_thread.run_sync(
+            lambda: anyio.run(self._classify, classifier, classification_prompt)
+        ) if _in_async_context() else anyio.run(
+            self._classify, classifier, classification_prompt
+        )
+        return "vote" if "STRUCTURED" in result.upper() else "debate"
+
+    def decide(
+        self,
+        prompt: str,
+        context: str = "",
+        route_model: str | None = None,
+        **kwargs: Any,
+    ) -> ConsensusResult:
+        """Auto-route to vote() or debate() based on question type.
+
+        Uses :meth:`route` to classify the question, then dispatches to the
+        appropriate method. Extra kwargs are forwarded as appropriate.
+
+        Args:
+            prompt: The question.
+            context: Optional context (code diff, document, etc.).
+            route_model: Model for routing classification.
+            **kwargs: Forwarded to vote() (threshold, strategy) or
+                      debate() (max_rounds, stop_on, threshold) as applicable.
+
+        Returns:
+            ConsensusResult from the selected method.
+        """
+        mode = self.route(prompt, route_model=route_model)
+        if mode == "vote":
+            vote_keys = {"threshold", "strategy"}
+            return self.vote(
+                prompt,
+                context=context,
+                **{k: v for k, v in kwargs.items() if k in vote_keys},
+            )
+        debate_keys = {"max_rounds", "stop_on", "threshold"}
+        return self.debate(
+            prompt,
+            context=context,
+            **{k: v for k, v in kwargs.items() if k in debate_keys},
+        )
+
+    async def _classify(self, model: str, prompt: str) -> str:
+        """Run a single low-cost classification call."""
+        try:
+            response = await litellm.acompletion(
+                model=model,
+                messages=[{"role": "user", "content": prompt}],
+                max_tokens=10,
+                temperature=0.0,
+                drop_params=True,
+            )
+            return response.choices[0].message.content or ""
+        except Exception:
+            return "OPEN_ENDED"  # Safe default — prefer debate over missing it
+
     # ------------------------------------------------------------------
     # Internal helpers
     # ------------------------------------------------------------------
@@ -277,6 +359,7 @@ class Council:
                 messages=[{"role": "user", "content": prompt_text}],
                 max_tokens=self.max_tokens,
                 temperature=self.temperature,
+                drop_params=True,
             )
 
             content = response.choices[0].message.content or ""

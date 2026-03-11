@@ -14,10 +14,11 @@ from .voting import ConsensusResult, Vote, VoteResult
 
 class StalemateStrategy(str, Enum):
     """How to resolve a stalemate."""
-    STOP = "stop"                       # Accept the tie, return TIE result
-    RANDOM_TIEBREAK = "random_tiebreak" # Randomly pick YES or NO
-    MODERATOR = "moderator"             # Ask a designated model to break the tie
-    ESCALATE_TO_HUMAN = "escalate"      # Return a special result asking for human input
+    STOP = "stop"                                       # Accept the tie, return TIE result
+    RANDOM_TIEBREAK = "random_tiebreak"                 # Randomly pick YES or NO
+    MODERATOR = "moderator"                             # Ask a designated model to break the tie
+    ESCALATE_TO_HUMAN = "escalate"                      # Return a special result asking for human input
+    STRUCTURED_DISAGREEMENT = "structured_disagreement" # Report where models agree/disagree
 
 
 def detect_stalemate(
@@ -150,6 +151,18 @@ def resolve_stalemate(
             ),
         )
 
+    if strategy == StalemateStrategy.STRUCTURED_DISAGREEMENT:
+        summary = build_disagreement_summary(votes)
+        lines = ["Stalemate: models could not reach agreement.", "Vote breakdown:"]
+        for vote_val, models in summary["vote_breakdown"].items():
+            lines.append(f"  {vote_val}: {', '.join(models)}")
+        return ConsensusResult(
+            decision="NO_CONSENSUS",
+            confidence=0.0,
+            votes=vote_map,
+            reasoning="\n".join(lines),
+        )
+
     # Fallback (should not happen with enum)
     return ConsensusResult(
         decision="TIE",
@@ -157,6 +170,55 @@ def resolve_stalemate(
         votes=vote_map,
         reasoning=f"Unknown stalemate strategy: {strategy}",
     )
+
+
+def build_disagreement_summary(votes: list[VoteResult]) -> dict:
+    """Build a structured summary of where models agree and disagree.
+
+    Used when a stalemate cannot be resolved — instead of returning a bare
+    TIE, callers can inspect exactly which models voted which way and why.
+
+    Args:
+        votes: The final-round votes.
+
+    Returns:
+        Dict with vote_breakdown, majority_vote, majority_models, is_split,
+        positions (per-model vote + confidence + reasoning summary), and
+        optionally minority_vote / minority_models.
+    """
+    vote_groups: dict[str, list[str]] = {}
+    for v in votes:
+        key = v.vote.value
+        if key not in vote_groups:
+            vote_groups[key] = []
+        vote_groups[key].append(v.model)
+
+    sorted_groups = sorted(vote_groups.items(), key=lambda x: -len(x[1]))
+    majority_vote = sorted_groups[0][0] if sorted_groups else "ABSTAIN"
+    majority_models = sorted_groups[0][1] if sorted_groups else []
+
+    result: dict = {
+        "vote_breakdown": vote_groups,
+        "majority_vote": majority_vote,
+        "majority_models": majority_models,
+        "is_split": len(vote_groups) > 1,
+        "positions": {
+            v.model: {
+                "vote": v.vote.value,
+                "confidence": v.confidence,
+                "reasoning_summary": (
+                    v.reasoning[:500] + "..." if len(v.reasoning) > 500 else v.reasoning
+                ),
+            }
+            for v in votes
+        },
+    }
+
+    if len(sorted_groups) > 1:
+        result["minority_vote"] = sorted_groups[1][0]
+        result["minority_models"] = sorted_groups[1][1]
+
+    return result
 
 
 def build_moderator_prompt(
