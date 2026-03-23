@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "consensus-council"
-version = "0.1.0"
+version = "0.2.0"
 description = "Drop-in multi-model voting with anti-sycophancy and stalemate resolution"
 readme = "README.md"
 license = "MIT"
@@ -39,6 +39,10 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
+search = [
+    "duckduckgo-search>=6.0",
+    "trafilatura>=1.6",
+]
 dev = [
     "pytest>=8.0",
     "pytest-asyncio>=0.23",
