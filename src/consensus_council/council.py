@@ -12,6 +12,8 @@ from typing import Any, Sequence
 import anyio
 import litellm
 
+from .web_search import has_search_tags, resolve_searches, SEARCH_INSTRUCTION
+
 from .anti_sycophancy import (
     BlindVoting,
     RotationOrder,
@@ -86,6 +88,7 @@ class Council:
         context: str = "",
         threshold: float = 0.5,
         strategy: str = "simple_majority",
+        enable_search: bool = False,
     ) -> ConsensusResult:
         """Synchronous voting. Queries all models and aggregates votes.
 
@@ -100,9 +103,9 @@ class Council:
             ConsensusResult with the aggregated decision.
         """
         return anyio.from_thread.run_sync(
-            lambda: anyio.run(self.avote, prompt, context, threshold, strategy)
+            lambda: anyio.run(self.avote, prompt, context, threshold, strategy, enable_search)
         ) if _in_async_context() else anyio.run(
-            self.avote, prompt, context, threshold, strategy
+            self.avote, prompt, context, threshold, strategy, enable_search
         )
 
     def debate(
@@ -112,6 +115,7 @@ class Council:
         max_rounds: int = 3,
         stop_on: str = "majority",
         threshold: float = 0.66,
+        enable_search: bool = False,
     ) -> ConsensusResult:
         """Synchronous multi-round debate.
 
@@ -126,9 +130,9 @@ class Council:
             ConsensusResult from the final round.
         """
         return anyio.from_thread.run_sync(
-            lambda: anyio.run(self.adebate, prompt, context, max_rounds, stop_on, threshold)
+            lambda: anyio.run(self.adebate, prompt, context, max_rounds, stop_on, threshold, enable_search)
         ) if _in_async_context() else anyio.run(
-            self.adebate, prompt, context, max_rounds, stop_on, threshold
+            self.adebate, prompt, context, max_rounds, stop_on, threshold, enable_search
         )
 
     async def avote(
@@ -137,21 +141,32 @@ class Council:
         context: str = "",
         threshold: float = 0.5,
         strategy: str = "simple_majority",
+        enable_search: bool = False,
     ) -> ConsensusResult:
         """Async voting -- queries all models concurrently."""
         tracker = CostTracker()
-        blind = BlindVoting(prompt=prompt, context=context)
+        full_prompt = f"{SEARCH_INSTRUCTION}\n\n{prompt}" if enable_search else prompt
+        blind = BlindVoting(prompt=full_prompt, context=context)
 
         # Check budget before starting
         if self.cost_ceiling:
             est = sum(
-                estimate_cost(m, max(1, len(prompt) // 4), self.max_tokens)
+                estimate_cost(m, max(1, len(full_prompt) // 4), self.max_tokens)
                 for m in self.models
             )
             self.cost_ceiling.check_vote(tracker, est)
 
         # Query all models concurrently
         vote_results = await self._query_all_blind(blind, tracker)
+
+        # Resolve web search tags if enabled
+        if enable_search:
+            for r in vote_results:
+                if has_search_tags(r.reasoning):
+                    resolved, _ = resolve_searches(r.reasoning)
+                    r.reasoning = resolved
+                    r.raw_response = resolved
+                    r.vote, r.confidence = extract_vote(resolved)
 
         # Apply voting strategy
         result = _apply_strategy(vote_results, strategy, threshold, self.weights)
@@ -165,9 +180,11 @@ class Council:
         max_rounds: int = 3,
         stop_on: str = "majority",
         threshold: float = 0.66,
+        enable_search: bool = False,
     ) -> ConsensusResult:
         """Async multi-round debate with anti-sycophancy and stalemate detection."""
         tracker = CostTracker()
+        prompt = f"{SEARCH_INSTRUCTION}\n\n{prompt}" if enable_search else prompt
         rotation = RotationOrder(len(self.models))
 
         prev_votes: dict[str, Vote] | None = None
@@ -209,6 +226,15 @@ class Council:
                 )
 
             all_vote_results = vote_results
+
+            # Resolve web search tags if enabled
+            if enable_search:
+                for r in vote_results:
+                    if has_search_tags(r.reasoning):
+                        resolved, _ = resolve_searches(r.reasoning)
+                        r.reasoning = resolved
+                        r.raw_response = resolved
+                        r.vote, r.confidence = extract_vote(resolved)
 
             # Build current state
             current_votes = {v.model: v.vote for v in vote_results}
@@ -315,13 +341,13 @@ class Council:
         """
         mode = self.route(prompt, route_model=route_model)
         if mode == "vote":
-            vote_keys = {"threshold", "strategy"}
+            vote_keys = {"threshold", "strategy", "enable_search"}
             return self.vote(
                 prompt,
                 context=context,
                 **{k: v for k, v in kwargs.items() if k in vote_keys},
             )
-        debate_keys = {"max_rounds", "stop_on", "threshold"}
+        debate_keys = {"max_rounds", "stop_on", "threshold", "enable_search"}
         return self.debate(
             prompt,
             context=context,

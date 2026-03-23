@@ -1,15 +1,18 @@
 # consensus-council
 
-> Drop-in multi-model voting with anti-sycophancy and stalemate resolution.
+> Drop-in multi-model voting with anti-sycophancy, live web search, and stalemate resolution.
 
-Ask multiple LLMs the same question and get a reliable, consensus-driven answer. Consensus Council prevents models from copying each other, detects when debates stall, and keeps your costs under control.
+Ask multiple LLMs the same question and get a reliable, consensus-driven answer. Consensus Council prevents models from copying each other, lets them search the web mid-debate, detects when debates stall, and keeps your costs under control.
 
-**Background:** Battle-tested across 73 books in a multi-model annotation pipeline.
+**Background:** Battle-tested across 73 books in a multi-model annotation pipeline and a 3-model oncology research council (Gemini 2.5 Pro + Claude Opus 4.6 + GPT-5.4-pro).
 
 ## Installation
 
 ```bash
 pip install consensus-council
+
+# With live web search support
+pip install consensus-council[search]
 ```
 
 ## Quick Start
@@ -161,6 +164,42 @@ vote, confidence = extract_vote("After careful review, I approve. FINAL VOTE: YE
 
 score, confidence = extract_score("I would rate this a 7/10.")
 # score=0.7, confidence=0.9
+```
+
+### Live Web Search
+
+Enable real-time web search so models can fetch evidence mid-debate. Models emit `[SEARCH: query]` tags — the council resolves them via DuckDuckGo (free, no API key) and feeds results back before the final answer.
+
+```python
+# Any model can search the web during debate
+result = council.debate(
+    "What are the latest clinical trial results for KRAS G12C inhibitors?",
+    enable_search=True,
+    max_rounds=3,
+)
+
+# Works with vote() and decide() too
+result = council.vote("Is sotorasib approved for second-line NSCLC?", enable_search=True)
+result = council.decide("Best approach for this architecture?", enable_search=True)
+```
+
+Models write searches inline:
+```
+Based on recent data [SEARCH: sotorasib CodeBreaK 200 trial 2025 results]
+the evidence suggests...
+```
+
+The council fetches full page content (via trafilatura), strips boilerplate, and injects it back into the model's response before voting. Up to 5 searches per model per round, run in parallel.
+
+```python
+# Use web search standalone
+from consensus_council import web_search, resolve_searches
+
+results = web_search("KRAS G12C resistance mechanisms 2025")
+print(results)  # Formatted string ready to inject into any prompt
+
+# Resolve [SEARCH: ...] tags in any text
+resolved_text, search_log = resolve_searches(model_response)
 ```
 
 ## CLI
