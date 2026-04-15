@@ -34,3 +34,6 @@ Thumbs.db
 # Environment
 .env
 .env.local
+
+# Standalone session outputs
+sessions/

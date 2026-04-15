@@ -1,0 +1,12 @@
+# Standalone script dependencies (council_consensus.py / council_utils.py)
+# For the pip package, see pyproject.toml
+anthropic>=0.40.0
+openai>=1.0.0
+google-generativeai>=0.8.0
+
+# Web search (web_search.py — free, no API key needed)
+duckduckgo-search>=6.0.0
+trafilatura>=1.10.0
+
+# Web search alternative (tavily_search.py — requires TAVILY_API_KEY)
+tavily-python>=0.5.0
