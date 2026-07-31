@@ -1,10 +1,80 @@
 # consensus-council
 
-> Drop-in multi-model voting with anti-sycophancy, live web search, and stalemate resolution.
+> Multi-model voting and three-stage deliberation with blind review, optional live sourcing, and cost controls.
 
-Ask multiple LLMs the same question and get a reliable, consensus-driven answer. Consensus Council prevents models from copying each other, lets them search the web mid-debate, detects when debates stall, and keeps your costs under control.
+Ask multiple LLMs independently, rotate anonymous peer-review labels, and let a separate chairman synthesize the evidence and disagreements. The original voting and debate APIs remain available for structured decisions.
 
-**Background:** Battle-tested across 73 books in a multi-model annotation pipeline and a 3-model oncology research council (Gemini 2.5 Pro + Claude Opus 4.6 + GPT-5.4-pro).
+The library is provider-configurable through LiteLLM. A featured profile below mirrors the author's current Claude Code council while keeping every model replaceable.
+
+## Three-stage council
+
+The new `deliberate()` path mirrors the current Claude Code workflow:
+
+1. **Independent panel:** every model answers without seeing the others.
+2. **Blind peer review:** each reviewer sees anonymous answers with a different label rotation, reducing position and identity bias.
+3. **Chairman synthesis:** a separate model receives the de-anonymized answers and reviews, reconciles disagreements, and returns the final response.
+
+```python
+from consensus_council import Council
+
+council = Council(
+    models=[
+        "openai/o3",
+        "gemini/gemini-2.5-pro",
+        "xai/grok-4",
+    ],
+    max_tokens=4096,
+)
+
+result = council.deliberate(
+    "Review this architecture and identify the safest design.",
+    chair_model="anthropic/claude-opus-4-6",
+    mode="auto",           # routes to simple or debate
+    debate_rounds=2,
+    enable_search=True,     # optional DuckDuckGo + Trafilatura sourcing
+    output_dir=None,        # no transcripts are written by default
+)
+
+print(result.synthesis)
+```
+
+Model aliases change over time and vary by provider account. Treat the names above as a profile, not a lock-in requirement; any LiteLLM-supported panel and chairman can be supplied.
+
+### What web sourcing does
+
+When `enable_search=True`, panelists can emit `[SEARCH: query]`. The search helper:
+
+- searches DuckDuckGo without an additional search API key;
+- extracts readable source-page content with Trafilatura;
+- limits each response to five searches and runs them concurrently;
+- sends the retrieved material back to the requesting model for a cited revision;
+- tells the chairman to retain claim-level citations and never invent sources.
+
+Search provenance improves auditability; it does not prove that a source or model conclusion is correct.
+
+### CLI
+
+```bash
+consensus-council deliberate "Review this design" \
+  -m openai/o3 \
+  -m gemini/gemini-2.5-pro \
+  -m xai/grok-4 \
+  --chair anthropic/claude-opus-4-6 \
+  --mode auto \
+  --search
+```
+
+Add `--output-dir ./council-runs` only when you intentionally want Markdown checkpoints and the final audit artifact.
+
+### Secret and data handling
+
+- API credentials are read from normal provider environment variables; no credentials are bundled.
+- `.env`, virtual environments, build products, and standalone session outputs are Git-ignored.
+- Provider errors are reduced to exception classes instead of echoing potentially sensitive response details.
+- Search and output artifacts are opt-in. Review generated artifacts before committing them because prompts and model responses may contain private input.
+
+
+**Standalone compatibility:** The root-level `council_consensus.py` is retained for existing v0.2 users. The packaged `consensus_council.Council` API is the source of truth for the three-stage workflow and featured Grok profile.
 
 ## Installation
 
@@ -20,7 +90,7 @@ pip install consensus-council[search]
 ```python
 from consensus_council import Council
 
-council = Council(models=["gpt-4o", "claude-sonnet-4-5-20250514", "gemini-2.0-flash"])
+council = Council(models=["openai/o3", "xai/grok-4", "gemini/gemini-2.5-pro"])
 result = council.vote("Is this code safe to deploy?", context=code_diff, threshold=0.66)
 print(result.decision, result.confidence)
 ```
@@ -51,8 +121,8 @@ result = council.vote("Delete production data?", strategy="unanimous")
 
 # Weighted -- trust GPT-4o more
 council = Council(
-    models=["gpt-4o", "claude-sonnet-4-5-20250514", "gemini-2.0-flash"],
-    weights={"gpt-4o": 2.0, "claude-sonnet-4-5-20250514": 1.5, "gemini-2.0-flash": 1.0},
+    models=["openai/o3", "xai/grok-4", "gemini/gemini-2.5-pro"],
+    weights={"openai/o3": 2.0, "xai/grok-4": 1.5, "gemini/gemini-2.5-pro": 1.0},
 )
 result = council.vote("Is this correct?", strategy="weighted_majority")
 ```
@@ -98,9 +168,9 @@ When a debate goes in circles (same votes, no new arguments), Consensus Council 
 from consensus_council.stalemate import StalemateStrategy
 
 council = Council(
-    models=["gpt-4o", "claude-sonnet-4-5-20250514"],
+    models=["openai/o3", "xai/grok-4"],
     stalemate_strategy=StalemateStrategy.MODERATOR,
-    moderator_model="gpt-4o",
+    moderator_model="openai/o3",
 )
 ```
 
@@ -119,7 +189,7 @@ Set hard budget limits to prevent runaway costs:
 from consensus_council.cost import CostCeiling
 
 council = Council(
-    models=["gpt-4o", "claude-sonnet-4-5-20250514", "gemini-2.0-flash"],
+    models=["openai/o3", "xai/grok-4", "gemini/gemini-2.5-pro"],
     cost_ceiling=CostCeiling(
         max_cost_per_vote=0.50,    # USD per vote() call
         max_cost_per_debate=5.00,  # USD per debate() call
@@ -140,7 +210,7 @@ You can also filter models that fit within a budget before creating the council:
 from consensus_council.cost import select_models_within_budget
 
 affordable = select_models_within_budget(
-    models=["gpt-4o", "claude-sonnet-4-5-20250514", "gemini-2.0-flash"],
+    models=["openai/o3", "xai/grok-4", "gemini/gemini-2.5-pro"],
     prompt="My question here",
     budget=0.10,
 )
@@ -209,30 +279,30 @@ Consensus Council includes a command-line interface for quick experiments:
 ```bash
 # Simple vote
 consensus-council vote "Is this approach correct?" \
-    -m gpt-4o \
-    -m claude-sonnet-4-5-20250514 \
+    -m openai/o3 \
+    -m xai/grok-4 \
     -t 0.66
 
 # Vote with context from a file
 consensus-council vote "Is this code safe?" \
-    -m gpt-4o \
-    -m gemini-2.0-flash \
+    -m openai/o3 \
+    -m gemini/gemini-2.5-pro \
     --context-file code.py
 
 # Multi-round debate
 consensus-council debate "Best approach for caching?" \
-    -m gpt-4o \
-    -m claude-sonnet-4-5-20250514 \
+    -m openai/o3 \
+    -m xai/grok-4 \
     -r 3 \
     --stop-on supermajority
 
 # With stalemate handling
 consensus-council debate "Should we migrate to Rust?" \
-    -m gpt-4o \
-    -m claude-sonnet-4-5-20250514 \
+    -m openai/o3 \
+    -m xai/grok-4 \
     -r 5 \
     --stalemate moderator \
-    --moderator gpt-4o
+    --moderator openai/o3
 ```
 
 ## Result Object
@@ -268,7 +338,7 @@ import anyio
 from consensus_council import Council
 
 async def main():
-    council = Council(models=["gpt-4o", "claude-sonnet-4-5-20250514"])
+    council = Council(models=["openai/o3", "xai/grok-4"])
     result = await council.avote("Is this safe?")
     print(result.decision)
 
@@ -279,14 +349,13 @@ anyio.run(main)
 
 Consensus Council uses [LiteLLM](https://docs.litellm.ai/) under the hood, so it supports any model LiteLLM supports:
 
-- OpenAI: `gpt-4o`, `gpt-4o-mini`, `o1`, `o3-mini`
-- Anthropic: `claude-sonnet-4-5-20250514`, `claude-opus-4-20250514`, `claude-haiku-3-5-20241022`
-- Google: `gemini-2.0-flash`, `gemini-2.5-pro`
-- AWS Bedrock: `bedrock/anthropic.claude-3-sonnet`
-- Azure: `azure/gpt-4o`
+- OpenAI: `openai/o3`
+- Anthropic: `anthropic/claude-opus-4-6`
+- Google: `gemini/gemini-2.5-pro`
+- xAI: `xai/grok-4`
 - Local: `ollama/llama3`, `vllm/...`
 
-Set the appropriate API keys as environment variables (`OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `GEMINI_API_KEY`, etc.).
+Set the appropriate API keys as environment variables (`OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `GEMINI_API_KEY`, `XAI_API_KEY`, etc.). Model aliases may change; verify them against your installed LiteLLM version and provider account.
 
 ## Disclaimer
 
@@ -295,6 +364,10 @@ Consensus Council is a tool for aggregating LLM opinions. It does **not** guaran
 **Do not rely on this library for medical, legal, financial, or safety-critical decisions without independent human review.** The authors accept no liability for decisions made based on model outputs, whether or not they reached consensus.
 
 Use at your own risk.
+
+## Acknowledgments
+
+The three-stage answer → peer-review → chairman pattern is inspired by [Andrej Karpathy's `llm-council`](https://github.com/karpathy/llm-council). This project adds configurable voting, rotating blind labels, debate rounds, cost ceilings, keyless source retrieval, checkpoint artifacts, and a reusable Python/CLI interface.
 
 ## License
 

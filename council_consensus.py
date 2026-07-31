@@ -1,4 +1,7 @@
-"""Council Consensus — Multi-model consensus engine.
+"""Legacy standalone v0.2 compatibility entry point.
+
+New integrations should use the packaged ``consensus_council.Council`` API,
+which includes the current three-stage deliberation workflow and Grok profile.
 
 Queries Gemini, Claude, and GPT in parallel with blind voting,
 anti-sycophancy measures, stalemate detection, and cost tracking.
@@ -245,7 +248,7 @@ def _query_all_parallel(prompt: str, round_num: int = 0, blind: bool = True,
         prompt: The base prompt to send.
         round_num: Current round (affects label rotation).
         blind: If True, wrap prompt with blind identity instructions.
-        enable_search: If True, prepend Tavily search instructions and resolve
+        enable_search: If True, prepend DuckDuckGo search instructions and resolve
                        any [SEARCH: query] tags models emit before final answer.
 
     Returns:
@@ -435,7 +438,7 @@ def ask_council(prompt: str, mode: str = "auto", enable_search: bool = False) ->
         prompt: The user's question.
         mode: 'auto' (Haiku routes), 'independent', or 'debate'.
         enable_search: If True, models can use [SEARCH: query] to run live
-                       Tavily web searches before giving their final answer.
+                       DuckDuckGo web searches before giving their final answer.
 
     Returns:
         Dict with mode, responses, votes, decision, cost, session path.

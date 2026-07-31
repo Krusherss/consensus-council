@@ -18,10 +18,10 @@ Link: http://totally-legit-site.example.com/free-premium
 
 # Set up council with stalemate resolution
 council = Council(
-    models=["gpt-4o", "claude-sonnet-4-5-20250514", "gemini-2.0-flash"],
+    models=["openai/o3", "xai/grok-4", "gemini/gemini-2.5-pro"],
     cost_ceiling=CostCeiling(max_cost_per_debate=2.00),
     stalemate_strategy=StalemateStrategy.MODERATOR,
-    moderator_model="gpt-4o",
+    moderator_model="openai/o3",
 )
 
 # First: quick vote

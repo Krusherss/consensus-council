@@ -31,7 +31,7 @@ def estimate_cost(
     a conservative default.
 
     Args:
-        model: LiteLLM model string (e.g. "gpt-4o").
+        model: LiteLLM model string (e.g. "openai/o3").
         prompt_tokens: Estimated input token count.
         completion_tokens: Estimated output token count.
 

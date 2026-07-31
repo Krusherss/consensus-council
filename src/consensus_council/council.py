@@ -14,6 +14,17 @@ import litellm
 
 from .web_search import has_search_tags, resolve_searches, SEARCH_INSTRUCTION
 
+from .deliberation import (
+    DeliberationResult,
+    PeerReview,
+    build_chair_prompt,
+    build_deliberation_crosstalk_prompt,
+    build_independent_prompt,
+    build_peer_review_prompt,
+    rotated_label_map,
+    write_deliberation_artifact,
+)
+
 from .anti_sycophancy import (
     BlindVoting,
     RotationOrder,
@@ -49,7 +60,7 @@ class Council:
     """Multi-model voting council.
 
     Args:
-        models: List of LiteLLM model strings (e.g. ["gpt-4o", "claude-sonnet-4-5-20250514"]).
+        models: List of LiteLLM model strings (e.g. ["openai/o3", "xai/grok-4"]).
         cost_ceiling: Optional CostCeiling to enforce budget limits.
         weights: Optional per-model reliability weights for weighted voting.
         stalemate_strategy: How to handle debate stalemates.
@@ -102,10 +113,16 @@ class Council:
         Returns:
             ConsensusResult with the aggregated decision.
         """
-        return anyio.from_thread.run_sync(
-            lambda: anyio.run(self.avote, prompt, context, threshold, strategy, enable_search)
-        ) if _in_async_context() else anyio.run(
-            self.avote, prompt, context, threshold, strategy, enable_search
+        return (
+            anyio.from_thread.run_sync(
+                lambda: anyio.run(
+                    self.avote, prompt, context, threshold, strategy, enable_search
+                )
+            )
+            if _in_async_context()
+            else anyio.run(
+                self.avote, prompt, context, threshold, strategy, enable_search
+            )
         )
 
     def debate(
@@ -129,11 +146,234 @@ class Council:
         Returns:
             ConsensusResult from the final round.
         """
-        return anyio.from_thread.run_sync(
-            lambda: anyio.run(self.adebate, prompt, context, max_rounds, stop_on, threshold, enable_search)
-        ) if _in_async_context() else anyio.run(
-            self.adebate, prompt, context, max_rounds, stop_on, threshold, enable_search
+        return (
+            anyio.from_thread.run_sync(
+                lambda: anyio.run(
+                    self.adebate,
+                    prompt,
+                    context,
+                    max_rounds,
+                    stop_on,
+                    threshold,
+                    enable_search,
+                )
+            )
+            if _in_async_context()
+            else anyio.run(
+                self.adebate,
+                prompt,
+                context,
+                max_rounds,
+                stop_on,
+                threshold,
+                enable_search,
+            )
         )
+
+    def deliberate(
+        self,
+        prompt: str,
+        chair_model: str,
+        context: str = "",
+        mode: str = "auto",
+        debate_rounds: int = 2,
+        route_model: str | None = None,
+        enable_search: bool = False,
+        output_dir: str | None = None,
+    ) -> DeliberationResult:
+        """Run the three-stage council and return the chairman's synthesis.
+
+        vote and debate remain the right APIs for binary decisions.
+        Use this method for open-ended research, design, and review questions.
+
+        Args:
+            prompt: The question for the council.
+            chair_model: LiteLLM model used only for final synthesis.
+            context: Optional code, document, or other supporting context.
+            mode: auto, simple, or debate.
+            debate_rounds: Total panel rounds in debate mode, including the
+                initial independent round.
+            route_model: Optional low-cost model used when mode is auto.
+            enable_search: Allow panelists to request DuckDuckGo searches.
+            output_dir: Optional directory for partial and final Markdown
+                artifacts. No files are written when omitted.
+        """
+        args = (
+            prompt,
+            chair_model,
+            context,
+            mode,
+            debate_rounds,
+            route_model,
+            enable_search,
+            output_dir,
+        )
+        return (
+            anyio.from_thread.run_sync(lambda: anyio.run(self.adeliberate, *args))
+            if _in_async_context()
+            else anyio.run(self.adeliberate, *args)
+        )
+
+    async def adeliberate(
+        self,
+        prompt: str,
+        chair_model: str,
+        context: str = "",
+        mode: str = "auto",
+        debate_rounds: int = 2,
+        route_model: str | None = None,
+        enable_search: bool = False,
+        output_dir: str | None = None,
+    ) -> DeliberationResult:
+        """Async three-stage deliberation with blind review and synthesis."""
+        if not chair_model:
+            raise ValueError("A chair_model is required for synthesis.")
+        if mode not in {"auto", "simple", "debate"}:
+            raise ValueError("mode must be 'auto', 'simple', or 'debate'.")
+        if debate_rounds < 1:
+            raise ValueError("debate_rounds must be at least 1.")
+
+        selected_mode = mode
+        if mode == "auto":
+            classification_prompt = (
+                "Classify this question as STRUCTURED or OPEN_ENDED. "
+                "STRUCTURED means a narrow factual or defined decision question. "
+                "OPEN_ENDED means design, strategy, architecture, research, or complex "
+                "qualitative analysis. Respond with exactly one label.\n\n"
+                f"Question: {prompt[:1000]}"
+            )
+            classification = await self._classify(
+                route_model or self.models[0], classification_prompt
+            )
+            selected_mode = (
+                "simple" if "STRUCTURED" in classification.upper() else "debate"
+            )
+
+        tracker = CostTracker()
+
+        def _check_budget(prompts: dict[str, str]) -> None:
+            if not self.cost_ceiling:
+                return
+            estimated = sum(
+                estimate_cost(
+                    model,
+                    max(1, len(prompt_text) // 4),
+                    self.max_tokens,
+                )
+                for model, prompt_text in prompts.items()
+            )
+            self.cost_ceiling.check_debate(tracker, estimated)
+
+        search_instruction = SEARCH_INSTRUCTION if enable_search else ""
+        independent_prompt = build_independent_prompt(
+            prompt, context=context, search_instruction=search_instruction
+        )
+        stage_prompts = {model: independent_prompt for model in self.models}
+        _check_budget(stage_prompts)
+        responses, stage_errors = await self._query_text_all(
+            stage_prompts, tracker, enable_search=enable_search
+        )
+        failed_models = list(stage_errors)
+        if not responses:
+            raise RuntimeError("All panel models failed during Stage 1.")
+
+        completed_rounds = 1
+        if selected_mode == "debate":
+            for round_num in range(2, debate_rounds + 1):
+                debate_prompts = {
+                    model: build_deliberation_crosstalk_prompt(
+                        prompt,
+                        model,
+                        responses,
+                        round_num,
+                        context=context,
+                        search_instruction=search_instruction,
+                    )
+                    for model in responses
+                }
+                _check_budget(debate_prompts)
+                updated, round_errors = await self._query_text_all(
+                    debate_prompts, tracker, enable_search=enable_search
+                )
+                responses.update(updated)
+                failed_models.extend(round_errors)
+                completed_rounds = round_num
+
+        review_question = prompt
+        if context:
+            review_question = f"{prompt}\n\nSUPPLIED CONTEXT:\n{context}"
+
+        review_holder: dict[str, PeerReview] = {}
+        panel_models = list(responses)
+        review_label_maps = {
+            reviewer: rotated_label_map(panel_models, index)
+            for index, reviewer in enumerate(panel_models)
+        }
+        review_prompts = {
+            reviewer: build_peer_review_prompt(
+                review_question, responses, review_label_maps[reviewer]
+            )
+            for reviewer in panel_models
+        }
+        _check_budget(review_prompts)
+
+        async with anyio.create_task_group() as tg:
+
+            async def _review(reviewer: str) -> None:
+                review, error = await self._query_text_model(
+                    reviewer, review_prompts[reviewer], tracker
+                )
+                review_holder[reviewer] = PeerReview(
+                    reviewer=reviewer,
+                    review=review,
+                    label_map=review_label_maps[reviewer],
+                    error=error,
+                )
+
+            for reviewer in panel_models:
+                tg.start_soon(_review, reviewer)
+
+        reviews = [review_holder[model] for model in panel_models]
+        failed_models.extend(item.reviewer for item in reviews if item.error)
+
+        partial_result = DeliberationResult(
+            question=prompt,
+            synthesis="",
+            responses=responses,
+            reviews=reviews,
+            chair_model=chair_model,
+            mode=selected_mode,
+            rounds=completed_rounds,
+            total_cost=tracker.total_cost,
+            failed_models=list(dict.fromkeys(failed_models)),
+        )
+        if output_dir:
+            write_deliberation_artifact(output_dir, partial_result, partial=True)
+
+        chair_prompt = build_chair_prompt(review_question, responses, reviews)
+        _check_budget({chair_model: chair_prompt})
+        synthesis, chair_error = await self._query_text_model(
+            chair_model, chair_prompt, tracker
+        )
+        if chair_error:
+            failed_models.append(chair_model)
+            synthesis = "Chairman synthesis failed; inspect the saved panel checkpoint."
+
+        result = DeliberationResult(
+            question=prompt,
+            synthesis=synthesis,
+            responses=responses,
+            reviews=reviews,
+            chair_model=chair_model,
+            mode=selected_mode,
+            rounds=completed_rounds,
+            total_cost=tracker.total_cost,
+            failed_models=list(dict.fromkeys(failed_models)),
+        )
+        if output_dir:
+            artifact = write_deliberation_artifact(output_dir, result)
+            result.artifact_path = str(artifact)
+        return result
 
     async def avote(
         self,
@@ -190,7 +430,6 @@ class Council:
         prev_votes: dict[str, Vote] | None = None
         prev_responses: dict[str, str] | None = None
         last_result: ConsensusResult | None = None
-        all_vote_results: list[VoteResult] = []
 
         for round_num in range(max_rounds):
             # Budget check
@@ -202,7 +441,9 @@ class Council:
                 try:
                     self.cost_ceiling.check_debate(tracker, est)
                 except BudgetExceededError:
-                    logger.warning("Budget exceeded at round %d, stopping debate.", round_num)
+                    logger.warning(
+                        "Budget exceeded at round %d, stopping debate.", round_num
+                    )
                     break
 
             # Determine query order for this round
@@ -224,8 +465,6 @@ class Council:
                     context=context,
                     tracker=tracker,
                 )
-
-            all_vote_results = vote_results
 
             # Resolve web search tags if enabled
             if enable_search:
@@ -253,13 +492,18 @@ class Council:
                 return result
 
             # Check stalemate
-            if detect_stalemate(current_votes, prev_votes, current_responses, prev_responses):
+            if detect_stalemate(
+                current_votes, prev_votes, current_responses, prev_responses
+            ):
                 logger.info("Stalemate detected at round %d.", round_num + 1)
                 stalemate_result = resolve_stalemate(
                     vote_results, self.stalemate_strategy, self.moderator_model
                 )
 
-                if stalemate_result.decision == "PENDING_MODERATOR" and self.moderator_model:
+                if (
+                    stalemate_result.decision == "PENDING_MODERATOR"
+                    and self.moderator_model
+                ):
                     # Run moderator
                     mod_result = await self._query_moderator(
                         prompt, vote_results, context, tracker
@@ -277,7 +521,9 @@ class Council:
 
         # Max rounds exhausted
         if last_result is not None:
-            last_result.reasoning += "\n[Max debate rounds reached without full consensus]"
+            last_result.reasoning += (
+                "\n[Max debate rounds reached without full consensus]"
+            )
             return last_result
 
         return ConsensusResult(
@@ -310,10 +556,12 @@ class Council:
             "Respond with exactly one word: STRUCTURED or OPEN_ENDED\n\n"
             f"Question: {prompt[:1000]}"
         )
-        result = anyio.from_thread.run_sync(
-            lambda: anyio.run(self._classify, classifier, classification_prompt)
-        ) if _in_async_context() else anyio.run(
-            self._classify, classifier, classification_prompt
+        result = (
+            anyio.from_thread.run_sync(
+                lambda: anyio.run(self._classify, classifier, classification_prompt)
+            )
+            if _in_async_context()
+            else anyio.run(self._classify, classifier, classification_prompt)
         )
         return "vote" if "STRUCTURED" in result.upper() else "debate"
 
@@ -372,13 +620,13 @@ class Council:
     # Internal helpers
     # ------------------------------------------------------------------
 
-    async def _query_model(
+    async def _query_text_model(
         self,
         model: str,
         prompt_text: str,
         tracker: CostTracker,
-    ) -> VoteResult:
-        """Query a single model and return a VoteResult."""
+    ) -> tuple[str, str | None]:
+        """Query one model, recording cost while redacting provider errors."""
         try:
             response = await litellm.acompletion(
                 model=model,
@@ -387,43 +635,114 @@ class Council:
                 temperature=self.temperature,
                 drop_params=True,
             )
-
             content = response.choices[0].message.content or ""
             usage = response.get("usage", {})
             prompt_tokens = usage.get("prompt_tokens", 0)
             completion_tokens = usage.get("completion_tokens", 0)
-
-            # Track cost
             try:
                 cost = litellm.completion_cost(completion_response=response)
             except Exception:
                 cost = estimate_cost(model, prompt_tokens, completion_tokens)
-
             tracker.record(
                 model=model,
                 cost=cost,
                 prompt_tokens=prompt_tokens,
                 completion_tokens=completion_tokens,
             )
-
-            vote, confidence = extract_vote(content)
-            return VoteResult(
-                model=model,
-                vote=vote,
-                confidence=confidence,
-                reasoning=content,
-                raw_response=content,
-            )
+            return content, None
         except Exception as exc:
-            logger.error("Model %s failed: %s", model, exc)
+            error_name = type(exc).__name__
+            logger.error("Model %s failed (%s).", model, error_name)
+            return "", f"{error_name}: provider call failed"
+
+    async def _query_text_with_search(
+        self,
+        model: str,
+        prompt_text: str,
+        tracker: CostTracker,
+        enable_search: bool,
+    ) -> tuple[str, str | None]:
+        """Query a model and, when requested, return a source-grounded revision."""
+        content, error = await self._query_text_model(model, prompt_text, tracker)
+        if error or not enable_search or not has_search_tags(content):
+            return content, error
+
+        resolved, search_log = await anyio.to_thread.run_sync(resolve_searches, content)
+        if not search_log:
+            return resolved, None
+
+        followup_prompt = (
+            "You requested live web searches. Below is your draft with the actual "
+            "DuckDuckGo/Trafilatura source material inserted. Rewrite the answer using "
+            "only supported claims, cite the supplied URLs inline, and never invent a "
+            "citation.\n\n"
+            f"{resolved}"
+        )
+        revised, followup_error = await self._query_text_model(
+            model, followup_prompt, tracker
+        )
+        if followup_error:
+            return resolved, followup_error
+        return revised, None
+
+    async def _query_text_all(
+        self,
+        prompts: dict[str, str],
+        tracker: CostTracker,
+        *,
+        enable_search: bool = False,
+    ) -> tuple[dict[str, str], dict[str, str]]:
+        """Query model-specific prompts concurrently, preserving input order."""
+        result_holder: dict[str, str] = {}
+        error_holder: dict[str, str] = {}
+
+        async with anyio.create_task_group() as tg:
+
+            async def _run(model: str, prompt_text: str) -> None:
+                text, error = await self._query_text_with_search(
+                    model, prompt_text, tracker, enable_search
+                )
+                if text:
+                    result_holder[model] = text
+                if error:
+                    error_holder[model] = error
+
+            for model, prompt_text in prompts.items():
+                tg.start_soon(_run, model, prompt_text)
+
+        results = {
+            model: result_holder[model] for model in prompts if model in result_holder
+        }
+        errors = {
+            model: error_holder[model] for model in prompts if model in error_holder
+        }
+        return results, errors
+
+    async def _query_model(
+        self,
+        model: str,
+        prompt_text: str,
+        tracker: CostTracker,
+    ) -> VoteResult:
+        """Query a single model and return a VoteResult."""
+        content, error = await self._query_text_model(model, prompt_text, tracker)
+        if error:
             return VoteResult(
                 model=model,
                 vote=Vote.ABSTAIN,
                 confidence=0.0,
                 reasoning="",
                 raw_response="",
-                error=str(exc),
+                error=error,
             )
+        vote, confidence = extract_vote(content)
+        return VoteResult(
+            model=model,
+            vote=vote,
+            confidence=confidence,
+            reasoning=content,
+            raw_response=content,
+        )
 
     async def _query_all_blind(
         self,
@@ -438,7 +757,9 @@ class Council:
 
             async def _run(model: str) -> None:
                 prompt_text = blind.build_prompt(model)
-                result_holder[model] = await self._query_model(model, prompt_text, tracker)
+                result_holder[model] = await self._query_model(
+                    model, prompt_text, tracker
+                )
 
             for model in self.models:
                 tg.start_soon(_run, model)
@@ -475,7 +796,9 @@ class Council:
                     original_prompt=original_prompt,
                     context=context,
                 )
-                result_holder[model] = await self._query_model(model, prompt_text, tracker)
+                result_holder[model] = await self._query_model(
+                    model, prompt_text, tracker
+                )
 
             for model in ordered_models:
                 tg.start_soon(_run, model)
@@ -516,10 +839,12 @@ class Council:
 # Module-level helpers
 # ------------------------------------------------------------------
 
+
 def _in_async_context() -> bool:
     """Check if we're already inside an async event loop."""
     try:
         import sniffio
+
         sniffio.current_async_library()
         return True
     except (ImportError, sniffio.AsyncLibraryNotFoundError):
