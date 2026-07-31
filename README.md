@@ -74,6 +74,24 @@ Add `--output-dir ./council-runs` only when you intentionally want Markdown chec
 - Search and output artifacts are opt-in. Review generated artifacts before committing them because prompts and model responses may contain private input.
 
 
+### Proven Claude Code script
+
+[`claude_code_council.py`](claude_code_council.py) is a copy-first public extraction of the author's proven Claude Code council script. Its orchestration, prompts, direct provider adapters, debate flow, peer review, chairman synthesis, DuckDuckGo/Trafilatura sourcing, checkpoints, and rolling synthesis log are intentionally kept close to the live implementation.
+
+It is designed for Claude Code: clone the repository, install the dedicated extra, and invoke it from a Claude Code command/helper or directly from the shell. Other agents and models can adapt the same script through their own helpers because the runtime itself is ordinary Python.
+
+```bash
+git clone https://github.com/Krusherss/consensus-council.git
+cd consensus-council
+python -m pip install -e ".[claude-code]"
+python claude_code_council.py "Review this decision"
+```
+
+The script reads `OPENAI_API_KEY`, `GEMINI_API_KEY`, `ANTHROPIC_API_KEY`, and `XAI_API_KEY` only from the process environment; it does not load a private `.env` path. It uses whichever panel keys are available, requiring at least two panelists. Its pinned profile currently uses o3, Gemini 2.5 Pro, Grok 4, Claude Opus 4.6 as chairman, and Claude Haiku 4.5 for automatic routing. To preserve the proven adapter, the xAI path still uses the legacy Chat Completions interface; xAI currently recommends its Responses API, so that migration is documented but intentionally deferred instead of silently rewriting the working adapter.
+
+Unlike the packaged API's opt-in artifacts, this proven-script path always writes the question, model responses, peer reviews, checkpoints, and synthesis to `~/council/`. Treat those files as potentially private and review them before sharing or committing them. Provider error details are reduced to safe labels so credentials and response bodies are not persisted.
+
+
 **Standalone compatibility:** The root-level `council_consensus.py` is retained for existing v0.2 users. The packaged `consensus_council.Council` API is the source of truth for the three-stage workflow and featured Grok profile.
 
 ## Installation

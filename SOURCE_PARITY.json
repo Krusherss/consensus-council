@@ -1,0 +1,56 @@
+{
+  "schema_version": 1,
+  "generated_on": "2026-07-31",
+  "policy": "copy-first: canonical -> untouched copy -> audit -> approved minimal deltas -> diff -> test -> scan",
+  "sources": [
+    {
+      "canonical_path": "~/.claude/scripts/council.py",
+      "public_path": "claude_code_council.py",
+      "canonical_file_sha256": "3b033d89ef100c4bd6267c34ab738eaa8f104904a9975e179ff1e4041e0a8aae",
+      "canonical_normalized_lf_sha256": "dad95301d803e71082cb45214dd5d400dd9b382671bf2c4cd5e107022fd3d001",
+      "untouched_copy_verified_normalized": true,
+      "public_file_sha256": "2368e5c2572dec9419fc3279772ca165cc270b3674f29de94e21c5453c9be696",
+      "transformations": [
+        {
+          "class": "security-portability",
+          "change": "Removed automatic loading of an author-specific home-directory dotenv file; the public copy reads documented process environment variables only."
+        },
+        {
+          "class": "security",
+          "change": "Moved the Gemini API key from the request URL query string to the x-goog-api-key header and removed response-payload detail from malformed-response errors."
+        },
+        {
+          "class": "security",
+          "change": "Reduced caught provider errors to safe exception labels, while retaining exact local missing-key guidance, so saved transcripts do not persist provider response details."
+        },
+        {
+          "class": "correctness",
+          "change": "Retained each reviewer's rotated Response A/B/C mapping and supplied it to the chairman so anonymous rankings can be de-anonymized as the proven workflow describes."
+        },
+        {
+          "class": "repository-normalization",
+          "change": "Normalized the public copy to repository LF line endings."
+        }
+      ]
+    },
+    {
+      "canonical_path": "~/.claude/scripts/web_search.py",
+      "public_path": "web_search.py",
+      "canonical_file_sha256": "e689cb6144ed23b916f53f2732d0c2f514f74ea15a58a58ee713d96c05d73a79",
+      "canonical_normalized_lf_sha256": "e689cb6144ed23b916f53f2732d0c2f514f74ea15a58a58ee713d96c05d73a79",
+      "public_file_sha256": "586e4fa5b427d0cd59aea988d936efd5e7b7fd3279559b0e52de94b96ed530df",
+      "public_normalized_lf_sha256": "8985b3a29e478ce8f3e87ecb9763dd905c857062970322cd7f3f3ec960bd49af",
+      "executable_code_parity": true,
+      "transformations": [
+        {
+          "class": "public-documentation",
+          "change": "Removed private MAP/Hydra/Tavily wording and replaced the no-rate-limit claim with accurate public network-service caveats; executable code is unchanged."
+        },
+        {
+          "class": "repository-normalization",
+          "change": "The checked-out public file uses repository CRLF line endings; normalized hashes are recorded for cross-platform comparison."
+        }
+      ]
+    }
+  ]
+}
