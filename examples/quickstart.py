@@ -2,13 +2,13 @@
 
 Demonstrates basic voting and debate across multiple LLM models.
 Requires API keys set as environment variables (e.g. OPENAI_API_KEY,
-ANTHROPIC_API_KEY, GEMINI_API_KEY).
+XAI_API_KEY, GEMINI_API_KEY).
 """
 
 from consensus_council import Council
 
 # --- Simple vote ---
-council = Council(models=["gpt-4o", "claude-sonnet-4-5-20250514", "gemini-2.0-flash"])
+council = Council(models=["openai/o3", "xai/grok-4", "gemini/gemini-2.5-pro"])
 
 result = council.vote(
     prompt="Is Python a good choice for building a REST API?",

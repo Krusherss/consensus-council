@@ -1,13 +1,13 @@
 """
-web_search.py — Free, unlimited web search for Hydra Council (and any project).
+web_search.py — Keyless web search for Consensus Council (and any project).
 
-No API keys. No accounts. No rate limits for normal use.
+No separate search API key or account. Network services may rate-limit or fail.
 
 Stack:
     duckduckgo-search  — fetch search result URLs + snippets
     trafilatura        — fetch full page content, strip boilerplate
 
-Drop-in replacement for tavily_search.py.
+Designed as a small standalone helper as well as a package module.
 Copy this file to any project and it works immediately.
 
 Usage:

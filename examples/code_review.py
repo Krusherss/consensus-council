@@ -32,7 +32,7 @@ code_diff = '''
 
 # Set up a council with cost control
 council = Council(
-    models=["gpt-4o", "claude-sonnet-4-5-20250514", "gemini-2.0-flash"],
+    models=["openai/o3", "xai/grok-4", "gemini/gemini-2.5-pro"],
     cost_ceiling=CostCeiling(max_cost_per_vote=0.50),
 )
 

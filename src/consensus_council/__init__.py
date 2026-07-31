@@ -1,6 +1,7 @@
-"""consensus-council: Drop-in multi-model voting with anti-sycophancy and stalemate resolution."""
+"""Multi-model voting and three-stage deliberation with blind peer review."""
 
 from .council import Council
+from .deliberation import DeliberationResult, PeerReview
 from .cost import CostTracker, CostCeiling, BudgetExceededError
 from .stalemate import StalemateStrategy, build_disagreement_summary
 from .voting import ConsensusResult, Vote, VoteResult, extract_score, extract_vote
@@ -9,6 +10,8 @@ from .web_search import search as web_search, has_search_tags, resolve_searches,
 __all__ = [
     # Core
     "Council",
+    "DeliberationResult",
+    "PeerReview",
     "ConsensusResult",
     "Vote",
     "VoteResult",
@@ -29,4 +32,4 @@ __all__ = [
     "SEARCH_INSTRUCTION",
 ]
 
-__version__ = "0.2.0"
+__version__ = "0.3.0"

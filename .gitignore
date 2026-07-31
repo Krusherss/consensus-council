@@ -33,7 +33,10 @@ Thumbs.db
 
 # Environment
 .env
-.env.local
+.env.*
+!.env.example
 
 # Standalone session outputs
 sessions/
+council-runs/
+council/

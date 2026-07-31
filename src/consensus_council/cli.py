@@ -14,6 +14,7 @@ from rich.table import Table
 from .cost import CostCeiling
 from .council import Council
 from .stalemate import StalemateStrategy
+from .voting import ConsensusResult
 
 console = Console()
 
@@ -28,27 +29,36 @@ def main() -> None:
 @main.command()
 @click.argument("prompt")
 @click.option(
-    "--model", "-m",
+    "--model",
+    "-m",
     multiple=True,
     required=True,
     help="Model to include in the council (repeat for multiple).",
 )
 @click.option(
-    "--threshold", "-t",
+    "--threshold",
+    "-t",
     default=0.5,
     type=float,
     help="Agreement threshold (0.0-1.0). Default: 0.5.",
 )
 @click.option(
-    "--strategy", "-s",
+    "--strategy",
+    "-s",
     default="simple_majority",
-    type=click.Choice([
-        "simple_majority", "supermajority", "unanimous", "weighted_majority",
-    ]),
+    type=click.Choice(
+        [
+            "simple_majority",
+            "supermajority",
+            "unanimous",
+            "weighted_majority",
+        ]
+    ),
     help="Voting strategy. Default: simple_majority.",
 )
 @click.option(
-    "--context-file", "-c",
+    "--context-file",
+    "-c",
     type=click.Path(exists=True),
     help="File to include as context.",
 )
@@ -76,7 +86,7 @@ def vote(
     """Run a single-round vote across models.
 
     Example:
-        consensus-council vote "Is this code safe?" -m gpt-4o -m claude-sonnet-4-5-20250514 -t 0.66
+        consensus-council vote "Is this code safe?" -m openai/o3 -m xai/grok-4 -t 0.66
     """
     context = ""
     if context_file:
@@ -108,13 +118,15 @@ def vote(
 @main.command()
 @click.argument("prompt")
 @click.option(
-    "--model", "-m",
+    "--model",
+    "-m",
     multiple=True,
     required=True,
     help="Model to include in the council (repeat for multiple).",
 )
 @click.option(
-    "--rounds", "-r",
+    "--rounds",
+    "-r",
     default=3,
     type=int,
     help="Maximum debate rounds. Default: 3.",
@@ -126,13 +138,15 @@ def vote(
     help="Stop condition. Default: majority.",
 )
 @click.option(
-    "--threshold", "-t",
+    "--threshold",
+    "-t",
     default=0.66,
     type=float,
     help="Threshold for supermajority. Default: 0.66.",
 )
 @click.option(
-    "--context-file", "-c",
+    "--context-file",
+    "-c",
     type=click.Path(exists=True),
     help="File to include as context.",
 )
@@ -175,7 +189,7 @@ def debate(
     """Run a multi-round debate across models.
 
     Example:
-        consensus-council debate "Best database?" -m gpt-4o -m claude-sonnet-4-5-20250514 -r 3
+        consensus-council debate "Best database?" -m openai/o3 -m xai/grok-4 -r 3
     """
     context = ""
     if context_file:
@@ -207,9 +221,121 @@ def debate(
     _display_result(result)
 
 
+@main.command()
+@click.argument("prompt")
+@click.option(
+    "--model",
+    "-m",
+    multiple=True,
+    required=True,
+    help="Panel model (repeat for multiple models).",
+)
+@click.option(
+    "--chair",
+    required=True,
+    help="Model used for the final chairman synthesis.",
+)
+@click.option(
+    "--mode",
+    default="auto",
+    type=click.Choice(["auto", "simple", "debate"]),
+    help="Deliberation mode. Default: auto.",
+)
+@click.option(
+    "--rounds",
+    "-r",
+    default=2,
+    type=int,
+    help="Total panel rounds in debate mode. Default: 2.",
+)
+@click.option(
+    "--route-model",
+    default=None,
+    help="Optional low-cost model for auto mode routing.",
+)
+@click.option(
+    "--search",
+    is_flag=True,
+    help="Enable keyless DuckDuckGo/Trafilatura source retrieval.",
+)
+@click.option(
+    "--context-file",
+    "-c",
+    type=click.Path(exists=True),
+    help="File to include as supporting context.",
+)
+@click.option(
+    "--output-dir",
+    type=click.Path(file_okay=False),
+    help="Opt in to Markdown checkpoints and a final audit artifact.",
+)
+@click.option(
+    "--max-cost",
+    default=5.00,
+    type=float,
+    help="Maximum estimated/provider-reported cost. Default: 5.00 USD.",
+)
+@click.option(
+    "--max-tokens",
+    default=4096,
+    type=int,
+    help="Maximum tokens per model response. Default: 4096.",
+)
+def deliberate(
+    prompt: str,
+    model: tuple[str, ...],
+    chair: str,
+    mode: str,
+    rounds: int,
+    route_model: str | None,
+    search: bool,
+    context_file: str | None,
+    output_dir: str | None,
+    max_cost: float,
+    max_tokens: int,
+) -> None:
+    """Run independent answers, blind peer review, and chairman synthesis."""
+    context = ""
+    if context_file:
+        with open(context_file, encoding="utf-8") as source:
+            context = source.read()
+
+    council = Council(
+        models=list(model),
+        cost_ceiling=CostCeiling(max_cost_per_debate=max_cost),
+        max_tokens=max_tokens,
+    )
+    with console.status("[bold green]Running three-stage council..."):
+        try:
+            result = council.deliberate(
+                prompt=prompt,
+                chair_model=chair,
+                context=context,
+                mode=mode,
+                debate_rounds=rounds,
+                route_model=route_model,
+                enable_search=search,
+                output_dir=output_dir,
+            )
+        except Exception as exc:
+            console.print(f"[bold red]Error:[/] {type(exc).__name__}")
+            sys.exit(1)
+
+    console.print()
+    console.print("[bold]Chairman synthesis[/]")
+    console.print(result.synthesis, markup=False)
+    console.print(
+        f"\nMode: {result.mode} | rounds: {result.rounds} | "
+        f"cost: ${result.total_cost:.4f}"
+    )
+    if result.failed_models:
+        console.print(f"[yellow]Failed models:[/] {', '.join(result.failed_models)}")
+    if result.artifact_path:
+        console.print(f"Artifact: {result.artifact_path}")
+
+
 def _display_result(result: "ConsensusResult") -> None:
     """Display a ConsensusResult using Rich tables."""
-    from .voting import ConsensusResult  # noqa: F811 (for type reference)
 
     # Header
     decision_color = {
@@ -257,8 +383,6 @@ def _display_result(result: "ConsensusResult") -> None:
 
     # Failed models
     if result.failed_models:
-        console.print(
-            f"\n[yellow]Failed models:[/] {', '.join(result.failed_models)}"
-        )
+        console.print(f"\n[yellow]Failed models:[/] {', '.join(result.failed_models)}")
 
     console.print()
