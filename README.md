@@ -97,10 +97,12 @@ Unlike the packaged API's opt-in artifacts, this proven-script path always write
 ## Installation
 
 ```bash
-pip install consensus-council
+git clone https://github.com/Krusherss/consensus-council.git
+cd consensus-council
+pip install -e .
 
 # With live web search support
-pip install consensus-council[search]
+pip install -e ".[search]"
 ```
 
 ## Quick Start
