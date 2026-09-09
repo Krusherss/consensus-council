@@ -83,7 +83,7 @@ def estimate_cost(model: str, prompt: str, response: str) -> float:
 class CostTracker:
     """Thread-safe cost tracker with per-call console logging and JSONL persistence.
 
-    Adapted from MHA Factory Revamped cost_tracker.py.
+    Adapted from a prior project's cost_tracker.py.
     """
 
     def __init__(self, log_dir: Optional[str] = None) -> None:
